@@ -1,62 +1,58 @@
-# 部署指南 - ClawCloud Run
+# 自动化部署指南 - GitHub Actions -> ClawCloud Run
 
-本项目已配置为 Docker 容器化部署。以下是将您的 Web 应用打包并部署到 ClawCloud Run 的步骤。
+本指南将帮助您配置 GitHub Actions，实现代码推送到 GitHub 后自动构建并部署到 ClawCloud。
 
-## 1. 前置准备
+## 1. 准备工作
 
-确保您已安装以下工具：
-- [Docker Desktop](https://www.docker.com/products/docker-desktop) (用于本地构建)
-- ClawCloud 命令行工具 (如果可用) 或访问 ClawCloud 控制台
+1.  **ClawCloud 账号**: 确保您有 ClawCloud 账号并开通了容器镜像服务 (CR) 和 Cloud Run 服务。
+2.  **GitHub 仓库**: 将您的代码上传到 GitHub 仓库。
 
-## 2. 本地构建与测试 (可选)
+## 2. 获取 ClawCloud 凭证
 
-在部署之前，建议在本地测试镜像：
+登录 ClawCloud 控制台，找到 **容器镜像服务 (Container Registry)**，获取以下信息：
+- **仓库地址 (Registry URL)**: 通常是 `registry.clawcloud.cn`
+- **命名空间 (Namespace)**: 您创建的组织或个人空间名称
+- **用户名和密码**: 用于登录镜像仓库的凭证
 
-```bash
-# 构建镜像
-docker build -t my-xiuxian-game .
+## 3. 配置 GitHub Secrets
 
-# 运行容器
-docker run -d -p 8080:80 my-xiuxian-game
-```
+为了让 GitHub Actions 能够访问您的 ClawCloud 账号，需要在 GitHub 仓库中设置密钥。
 
-访问 `http://localhost:8080` 确认游戏可以正常运行。
+1.  进入您的 GitHub 仓库页面。
+2.  点击 **Settings** -> **Secrets and variables** -> **Actions**。
+3.  点击 **New repository secret**，依次添加以下密钥：
 
-## 3. 部署到 ClawCloud Run
+| Name | Value (示例) | 说明 |
+|------|--------------|------|
+| `CLAW_REGISTRY_URL` | `registry.clawcloud.cn` | 镜像仓库地址 |
+| `CLAW_REGISTRY_USERNAME` | `your-username` | 镜像仓库登录用户名 |
+| `CLAW_REGISTRY_PASSWORD` | `your-password` | 镜像仓库登录密码 |
+| `CLAW_NAMESPACE` | `your-namespace` | 您的命名空间名称 |
 
-### 方法 A: 使用控制台上传 (最简单)
+## 4. 首次部署与自动更新设置
 
-1.  **构建镜像**: 在本地执行 `docker build -t my-xiuxian-game .`
-2.  **导出镜像**: 将镜像保存为文件 `docker save -o my-xiuxian-game.tar my-xiuxian-game`
-3.  登录 ClawCloud 控制台。
-4.  进入 **容器镜像服务 (CR)** 或直接进入 **Cloud Run** 服务。
-5.  上传您的镜像或连接您的 GitHub/GitLab 仓库进行自动构建。
-6.  创建一个新的 Service，选择刚刚上传的镜像。
-7.  **端口设置**: 确保容器端口设置为 `80`。
+### 步骤 A: 触发首次构建
+1.  将包含 `.github/workflows/deploy.yml` 的代码推送到 GitHub `main` 或 `master` 分支。
+2.  在 GitHub 仓库的 **Actions** 标签页中，您应该能看到 `Build and Deploy to ClawCloud` 工作流正在运行。
+3.  等待工作流显示绿色对勾（成功），这意味着镜像已推送到 ClawCloud。
 
-### 方法 B: 使用 Docker Push (推荐)
+### 步骤 B: 在 ClawCloud 创建服务
+1.  登录 ClawCloud Run 控制台。
+2.  **创建服务**:
+    - 选择 **从镜像部署**。
+    - 镜像地址填写: `registry.clawcloud.cn/<您的命名空间>/xiuxian-game:latest` (请根据实际情况替换)。
+    - **容器端口**: 设置为 `80`。
+3.  **开启自动部署 (如果支持)**:
+    - 在服务设置中，查看是否有“自动部署”或“触发器”选项。如果有，启用它，这样当新镜像 (`latest`) 推送时，服务会自动更新。
+    - 如果没有自动部署选项，您可能需要在每次推送代码后，手动在控制台点击“重新部署”或“更新修订版本”。
 
-如果您有 ClawCloud 的镜像仓库地址 (Registry URL)：
+## 5. 访问网站
 
-1.  **登录仓库**:
-    ```bash
-    docker login registry.clawcloud.cn
-    # 输入您的用户名和密码
-    ```
+部署成功后，ClawCloud 会为您分配一个公网域名（例如 `https://xiuxian-game-xxxxx.claw.run`）。点击即可访问您的修仙游戏！
 
-2.  **标记镜像**:
-    ```bash
-    # 将 <namespace> 替换为您的命名空间
-    docker tag my-xiuxian-game registry.clawcloud.cn/<namespace>/xiuxian-game:v1
-    ```
+---
 
-3.  **推送镜像**:
-    ```bash
-    docker push registry.clawcloud.cn/<namespace>/xiuxian-game:v1
-    ```
+### 故障排除
 
-4.  在 ClawCloud Run 控制台中创建服务，并选择 `registry.clawcloud.cn/<namespace>/xiuxian-game:v1` 镜像。
-
-## 4. 验证
-
-部署完成后，ClawCloud 会提供一个公网访问地址。访问该地址即可开始游戏。
+- **GitHub Action 失败**: 检查 Secrets 是否填写正确，特别是密码和命名空间。
+- **服务无法访问**: 检查 ClawCloud Run 服务配置中的端口是否为 `80`。
